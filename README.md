@@ -1,6 +1,6 @@
 # tabsyn-cs726-Spring2024
 A modified version of the tabsyn project presented in ICLR for course CS726
-This is the original project - <a href="https://github.com/amazon-science/tabsyn"> </a>
+This is the original project - https://github.com/amazon-science/tabsyn
 
 Refer here - most instructions are the sam
 
@@ -8,7 +8,7 @@ In this README we will just tell you how to install and run the project.
 
 First of all you need to install conda. Remember that you do not need to be a sudo user.
 This URL tells you how to install and use conda without root access
-<a href="https://csmasterme.wordpress.com/2021/01/22/installing-anaconda-locally-for-a-user-in-remote-server-without-sudo-permission/"> </a>
+https://csmasterme.wordpress.com/2021/01/22/installing-anaconda-locally-for-a-user-in-remote-server-without-sudo-permission/"
 
 
 Just replace these instructions
