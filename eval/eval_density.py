@@ -6,6 +6,7 @@ import json
 
 # Metrics
 from sdmetrics.reports.single_table import QualityReport, DiagnosticReport
+from sdmetrics.reports.single_table._properties import Coverage
 
 
 import argparse
@@ -96,6 +97,7 @@ if __name__ == '__main__':
     qual_report.generate(new_real_data, new_syn_data, metadata)
 
     diag_report = DiagnosticReport()
+    diag_report._properties['Coverage'] = Coverage()
     diag_report.generate(new_real_data, new_syn_data, metadata)
 
     quality =  qual_report.get_properties()
