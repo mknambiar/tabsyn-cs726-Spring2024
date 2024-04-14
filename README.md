@@ -2,9 +2,7 @@
 A modified version of the tabsyn project presented in ICLR for course CS726
 This is the original project - https://github.com/amazon-science/tabsyn
 
-Refer here - most instructions are the sam
-
-In this README we will just tell you how to install and run the project.
+In this README we will just tell you how to install and run the project, the way we got it to work.
 
 First of all you need to install conda. Remember that you do not need to be a sudo user.
 This URL tells you how to install and use conda without root access
