@@ -62,6 +62,7 @@ Download raw dataset:
 ```
 conda activate tabsyn
 python download_dataset.py
+conda deactivate
 ```
 
 Process dataset:
@@ -69,6 +70,7 @@ Process dataset:
 ```
 conda activate tabsyn
 python process_dataset.py
+conda deactivate
 ```
 
 ### Using your own dataset
@@ -115,12 +117,13 @@ For Tabsyn, use the following command for training:
 
 ```
 conda activate tabsyn
-
 # train VAE first
 python main.py --dataname [NAME_OF_DATASET] --method vae --mode train
 
+
 # after the VAE is trained, train the diffusion model
 python main.py --dataname [NAME_OF_DATASET] --method tabsyn --mode train
+conda deactivate
 ```
 
 ## Tabular Data Synthesis
@@ -136,7 +139,7 @@ For Tabsyn, use the following command for synthesis:
 ```
 conda activate tabsyn
 python main.py --dataname [NAME_OF_DATASET] --method tabsyn --mode sample --save_path [PATH_TO_SAVE]
-
+conda deactivate
 ```
 
 The default save path is "synthetic/[NAME_OF_DATASET]/[METHOD_NAME].csv"
@@ -149,6 +152,7 @@ We evaluate the quality of synthetic data using metrics from various aspects.
 ```
 conda activate tabsyn
 python eval/eval_density.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
+conda deactivate
 ```
 
 
@@ -158,7 +162,10 @@ python eval/eval_density.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] -
 
 ```
 conda activate metrics
+#When you are running the command below for the first time you may get some missing module errors
+#For all such errors, understand what module is missing and install them using pip install
 python eval/eval_quality.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
+conda deactivate
 ```
 
 #### Machine Learning Efficiency
@@ -166,6 +173,7 @@ python eval/eval_quality.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] -
 ```
 conda activate tabsyn
 python eval/eval_mle.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
+conda deactivate
 ```
 
 #### Pricavy protection: Distance to Closest Record (DCR)
@@ -173,6 +181,7 @@ python eval/eval_mle.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --pat
 ```
 conda activate tabsyn
 python eval/eval_dcr.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
+conda deactivate
 ```
 
 #### Detection: Classifier Two Sample Tests (C2ST)
@@ -180,4 +189,5 @@ python eval/eval_dcr.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --pat
 ```
 conda activate tabsyn
 python eval/eval_detection.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
+conda deactivate
 ```
