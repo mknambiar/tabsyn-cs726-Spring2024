@@ -204,7 +204,7 @@ def feat_transform(data, info, label_encoder = None, encoders = None, cmax = Non
             if encoder:
                 feature = encoder.transform(col)
             else:
-                encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+                encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
                 encoders[idx] = encoder
                 feature = encoder.fit_transform(col)
                 
