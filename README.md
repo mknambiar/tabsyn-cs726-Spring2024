@@ -1,15 +1,63 @@
-# tabsyn-cs726-Spring2024
-A modified version of the tabsyn project presented in ICLR for course CS726
-This is the original project - https://github.com/amazon-science/tabsyn
+# (ICLR 2024 Oral) Mixed-Type Tabular Data Synthesis with Score-based Diffusion in Latent Space 
 
-In this README we will just tell you how to install and run the project, the way we got it to work.
+<p align="center">
+  <!-- <a href="https://github.com/hengruizhang98/tabsyn/blob/main/LICENSE">
+    <img alt="GitHub License" src="https://img.shields.io/github/license/hengruizhang98/tabsyn">
+  </a> -->
+  <a href="https://github.com/hengruizhang98/tabsyn/blob/main/LICENSE">
+    <img alt="GitHub License" src="https://img.shields.io/badge/license-Apache 2.0-green">
+  </a>
+  <a href="https://openreview.net/forum?id=4Ay23yeuz0">
+    <img alt="Openreview" src="https://img.shields.io/badge/review-OpenReview-red">
+  </a>
+  <a href="https://arxiv.org/abs/2310.09656">
+    <img alt="Paper URL" src="https://img.shields.io/badge/arxiv-2310.09656-blue">
+  </a>
+</p>
 
-First of all you need to install conda. Remember that you do not need to be a sudo user.
-This URL tells you how to install and use conda without root access
-https://csmasterme.wordpress.com/2021/01/22/installing-anaconda-locally-for-a-user-in-remote-server-without-sudo-permission/"
+This repository contains the implementation and modification of the paper:
+> **Mixed-Type Tabular Data Synthesis with Score-based Diffusion in Latent Space**  <br>
+> The Twelfth International Conference on Learning Representations (ICLR 2024, Oral Presentation)<br>
+> Hengrui Zhang, Jiani Zhang, Balasubramaniam Srinivasan, Zhengyuan Shen, Xiao Qin, Christos Faloutsos, Huzefa Rangwala, George Karypis <br>
+> This project has been modified to use normalizing flows in place of VAEs. Also new samplers have been implemented which can sample directly from VAE or Normalizing Flows without using diffusion models
+>
 
-Now below we give you instructions based on what worked for us.
-----------------------------------------------------------------
+## Introduction
+
+<div align="center">
+  <img src="images/tabsyn_model.jpg" alt="Model Logo" width="800" style="margin-left:'auto' margin-right:'auto' display:'block'"/>
+  <br>
+  <br>
+</div>
+TabSyn is a deep generative model for the synthesis of mixed-type tabular data (i.e., continuous/numerical and discrete/categorical). Tabsyn consists of two parts: 1) A Variational AutoEncoder (VAE) that encodes mixed-type of tabular data into the continuous latent space. 2) A score-based diffusion model for learning the densities of the latent embeddings.
+
+###### TabSyn achieves SOTA performance in recovering the ground-truth distribution of tabular data (under five distinct metrics), and has a significantly faster sampling speed than previous diffusion-based methods.
+<div style="display:flex; justify-content:center;">
+    <img src="images/radar.jpg" style="width:350px; margin-right:50px;">
+    <img src="images/nfe1.jpg" style="width:300px;">
+</div>
+
+###### Visualizations of density estimation for signle column and pair-wise correlation.
+<div align="center">
+  <img src="images/density.jpg" alt="OLMo Logo" width="800" style="margin-left:'auto' margin-right:'auto' display:'block'"/>
+  <br>
+  <br>
+</div>
+<div align="center">
+  <img src="images/heat_map.jpg" alt="OLMo Logo" width="800" style="margin-left:'auto' margin-right:'auto' display:'block'"/>
+  <br>
+  <br>
+</div>
+
+<!-- <div align="center">
+  <img src="images/radar.jpg" alt="OLMo Logo" width="800" style="margin-left:'auto' margin-right:'auto' display:'block'"/>
+  <br>
+  <br>
+</div> -->
+
+
+
+
 ## Installing Dependencies
 
 Python version: 3.10
@@ -21,7 +69,12 @@ conda create -n tabsyn python=3.10
 conda activate tabsyn
 ```
 
-Install pytorch via conda
+Install pytorch
+```
+pip install torch torchvision torchaudio
+```
+
+or via conda
 ```
 conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.7 -c pytorch -c nvidia
 ```
@@ -44,8 +97,8 @@ pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -
 Create another environment for the quality metric (package "synthcity")
 
 ```
-conda create -n metrics python=3.10
-conda activate metrics
+conda create -n tabsyn python=3.10
+conda activate tabsyn
 
 pip install synthcity
 pip install category_encoders
@@ -58,17 +111,13 @@ pip install category_encoders
 Download raw dataset:
 
 ```
-conda activate tabsyn
 python download_dataset.py
-conda deactivate
 ```
 
 Process dataset:
 
 ```
-conda activate tabsyn
 python process_dataset.py
-conda deactivate
 ```
 
 ### Using your own dataset
@@ -111,17 +160,26 @@ python main.py --dataname [NAME_OF_DATASET] --method [NAME_OF_BASELINE_METHODS] 
 Options of [NAME_OF_DATASET]: adult, default, shoppers, magic, beijing, news
 Options of [NAME_OF_BASELINE_METHODS]: smote, goggle, great, stasy, codi, tabddpm
 
-For Tabsyn, use the following command for training:
+For Tabsyn (original), use the following command for training:
 
 ```
-conda activate tabsyn
 # train VAE first
 python main.py --dataname [NAME_OF_DATASET] --method vae --mode train
 
-
 # after the VAE is trained, train the diffusion model
-python main.py --dataname [NAME_OF_DATASET] --method tabsyn --mode train
-conda deactivate
+python main.py --dataname [NAME_OF_DATASET] --method tabsyn --latent vae --mode train
+```
+For Tabsyn (modified with Norm Flow), use the following command for training:
+
+```
+# train the AutoEncoder first
+python main.py --dataname [NAME_OF_DATASET] --method ae --mode train
+
+# after the ae is trained train the Normalized Flow next
+python main.py --dataname [NAME_OF_DATASET] --method nflow --mode train
+
+# after the Normalized Flow is trained, train the diffusion model
+python main.py --dataname [NAME_OF_DATASET] --method tabsyn --latent nflow --mode train
 ```
 
 ## Tabular Data Synthesis
@@ -135,12 +193,28 @@ python main.py --dataname [NAME_OF_DATASET] --method [NAME_OF_BASELINE_METHODS] 
 For Tabsyn, use the following command for synthesis:
 
 ```
-conda activate tabsyn
-python main.py --dataname [NAME_OF_DATASET] --method tabsyn --mode sample --save_path [PATH_TO_SAVE]
-conda deactivate
-```
+python main.py --dataname [NAME_OF_DATASET] --method tabsyn --latent [vae/nflow] --mode sample --save_path [PATH_TO_SAVE]
 
-The default save path is "synthetic/[NAME_OF_DATASET]/[METHOD_NAME].csv"
+```
+For generating from pure VAE 
+
+```
+python main.py --dataname [NAME_OF_DATASET] --method vae --latent vae --mode sample --save_path [PATH_TO_SAVE]
+
+```
+For generating from pure Normalized flows
+
+```
+python main.py --dataname [NAME_OF_DATASET] --method nflow --latent nflow --mode sample --save_path [PATH_TO_SAVE]
+
+``` 
+
+
+The default save path is "synthetic/[NAME_OF_DATASET]/[METHOD_NAME]_{LATENT_NAME}.csv"
+The latent name can either be 'vae' or 'nflow' depending on how the denoising model has been trained
+If the denoising model is not being used then method name can be same as the latent name.
+So this may not work for evaluating the metrics the baseline methods - smote, goggle, great, stasy, codi, tabddpm.
+The baseline methods will continue to work. Just that if you want to evaluate their metrics minor code changes areneeded in the eval folder
 
 ## Evaluation
 We evaluate the quality of synthetic data using metrics from various aspects.
@@ -148,9 +222,7 @@ We evaluate the quality of synthetic data using metrics from various aspects.
 #### Density estimation of single column and pair-wise correlation ([link](https://docs.sdv.dev/sdmetrics/reports/quality-report/whats-included))
 
 ```
-conda activate tabsyn
-python eval/eval_density.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
-conda deactivate
+python eval/eval_density.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME]  --latent [vae/nflow] --path [PATH_TO_SYNTHETIC_DATA]
 ```
 
 
@@ -159,33 +231,52 @@ conda deactivate
 - $\beta$-recall: the diversity of synthetic data
 
 ```
-conda activate metrics
-#When you are running the command below for the first time you may get some missing module errors
-#For all such errors, understand what module is missing and install them using pip install
-python eval/eval_quality.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
-conda deactivate
+python eval/eval_quality.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --latent [vae/nflow] --path [PATH_TO_SYNTHETIC_DATA]
 ```
 
 #### Machine Learning Efficiency
 
 ```
-conda activate tabsyn
-python eval/eval_mle.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
-conda deactivate
+python eval/eval_mle.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --latent [vae/nflow] --path [PATH_TO_SYNTHETIC_DATA]
 ```
 
 #### Pricavy protection: Distance to Closest Record (DCR)
-
+This will work for baseline methods now, but not for tabsyn, VAE and normalized flows
 ```
-conda activate tabsyn
 python eval/eval_dcr.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
-conda deactivate
 ```
 
 #### Detection: Classifier Two Sample Tests (C2ST)
 
 ```
-conda activate tabsyn
-python eval/eval_detection.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --path [PATH_TO_SYNTHETIC_DATA]
-conda deactivate
+python eval/eval_detection.py --dataname [NAME_OF_DATASET] --model [METHOD_NAME] --latent [vae/nflow] --path [PATH_TO_SYNTHETIC_DATA]
+```
+
+
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+
+## License
+
+This project is licensed under the Apache-2.0 License.
+
+
+## Reference
+We appreciate your citations if you find this repository useful to your research!
+```
+@inproceedings{tabsyn,
+  title={Mixed-Type Tabular Data Synthesis with Score-based Diffusion in Latent Space},
+  author={Zhang, Hengrui and Zhang, Jiani and Srinivasan, Balasubramaniam and Shen, Zhengyuan and Qin, Xiao and Faloutsos, Christos and Rangwala, Huzefa and Karypis, George},
+  booktitle={The twelfth International Conference on Learning Representations},
+  year={2024}
+}
+```
+```
+@article{zhang2023mixed,
+  title={Mixed-Type Tabular Data Synthesis with Score-based Diffusion in Latent Space},
+  author={Zhang, Hengrui and Zhang, Jiani and Srinivasan, Balasubramaniam and Shen, Zhengyuan and Qin, Xiao and Faloutsos, Christos and Rangwala, Huzefa and Karypis, George},
+  journal={arXiv preprint arXiv:2310.09656},
+  year={2023}
+}
 ```

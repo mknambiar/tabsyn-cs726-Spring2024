@@ -12,7 +12,7 @@ from tqdm import tqdm
 import json
 import time
 
-from tabsyn.vae.model import Model_VAE, Encoder_model, Decoder_model
+from tabsyn.nflow.model import Model_NFLOW_nextgen, Encoder_NFLOW_model_nextgen, Decoder_NFLOW_model_nextgen, Reconstructor
 from utils_train import preprocess, TabularDataset
 
 warnings.filterwarnings('ignore')
@@ -28,34 +28,36 @@ FACTOR = 32
 NUM_LAYERS = 2
 
 
-def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat, mu_z, logvar_z):
-    ce_loss_fn = nn.CrossEntropyLoss()
-    mse_loss = (X_num - Recon_X_num).pow(2).mean()
-    ce_loss = 0
-    acc = 0
-    total_num = 0
+def get_input_train(args):
+    dataname = args.dataname
+    latent = 'nflow'
 
-    for idx, x_cat in enumerate(Recon_X_cat):
-        if x_cat is not None:
-            ce_loss += ce_loss_fn(x_cat, X_cat[:, idx])
-            x_hat = x_cat.argmax(dim = -1)
-        acc += (x_hat == X_cat[:,idx]).float().sum()
-        total_num += x_hat.shape[0]
+
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_dir = f'data/{dataname}'
+
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/{latent}'
+    train_embedding_save_path = f'{curr_dir}/ckpt/{dataname}/train_ae.npy'
+    train_ae = torch.tensor(np.load(train_embedding_save_path)).float()
     
-    ce_loss /= (idx + 1)
-    acc /= total_num
-    # loss = mse_loss + ce_loss
+    train_ae = train_ae[:, 1:, :]
+    B, num_tokens, token_dim = train_ae.size()
+    in_dim = num_tokens * token_dim
+    train_ae = train_ae.view(B, in_dim)
 
-    temp = 1 + logvar_z - mu_z.pow(2) - logvar_z.exp()
-
-    loss_kld = -0.5 * torch.mean(temp.mean(-1).mean())
-    return mse_loss, ce_loss, loss_kld, acc
-
+    test_embedding_save_path = f'{curr_dir}/ckpt/{dataname}/test_ae.npy'
+    test_ae = torch.tensor(np.load(test_embedding_save_path)).float()
+    
+    test_ae = test_ae[:, 1:, :]
+    B, num_tokens, token_dim = test_ae.size()
+    in_dim = num_tokens * token_dim
+    test_ae = test_ae.view(B, in_dim)
+    return train_ae, test_ae, curr_dir, dataset_dir, ckpt_dir
 
 def main(args):
     dataname = args.dataname
-    data_dir = f'data/{dataname}'
     latent = args.latent
+    data_dir = f'data/{dataname}'
 
     max_beta = args.max_beta
     min_beta = args.min_beta
@@ -63,6 +65,7 @@ def main(args):
 
     device =  args.device
 
+    train_ae, test_ae,_, _, ckpt_path = get_input_train(args)
 
     info_path = f'data/{dataname}/info.json'
 
@@ -70,44 +73,48 @@ def main(args):
         info = json.load(f)
 
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/' 
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}' 
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
 
+    _, _, categories, d_numerical = preprocess(data_dir, task_type = info['task_type'])
+    
     model_save_path = f'{ckpt_dir}/model.pt'
+    #ae_encoder_load_path = f'{ckpt_dir}/ae_encoder.pt'
     encoder_save_path = f'{ckpt_dir}/encoder.pt'
+    ae_decoder_load_path = f'{ckpt_dir}/ae_decoder.pt'
     decoder_save_path = f'{ckpt_dir}/decoder.pt'
 
-    X_num, X_cat, categories, d_numerical = preprocess(data_dir, task_type = info['task_type'])
-
-    X_train_num, _ = X_num
-    X_train_cat, _ = X_cat
-
-    X_train_num, X_test_num = X_num
-    X_train_cat, X_test_cat = X_cat
-
-    X_train_num, X_test_num = torch.tensor(X_train_num).float(), torch.tensor(X_test_num).float()
-    X_train_cat, X_test_cat =  torch.tensor(X_train_cat), torch.tensor(X_test_cat)
-
-
-    train_data = TabularDataset(X_train_num.float(), X_train_cat)
-
-    X_test_num = X_test_num.float().to(device)
-    X_test_cat = X_test_cat.to(device)
-
     batch_size = 4096
+    print('train_ae shape = ', train_ae.shape)
     train_loader = DataLoader(
-        train_data,
+        train_ae,
         batch_size = batch_size,
         shuffle = True,
         num_workers = 4,
     )
 
-    model = Model_VAE(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR, bias = True)
-    model = model.to(device)
+    pre_trained_decoder_model = Reconstructor(d_numerical, categories, D_TOKEN)
+    pre_trained_decoder_model.eval()
+    pre_trained_decoder_model.load_state_dict(torch.load(ae_decoder_load_path))
+    
+    model = Model_NFLOW_nextgen(d_numerical, categories, D_TOKEN, bias = True)
+    
+    test_ae = test_ae.to(device)
+    # if torch.cuda.device_count() > 1:
+        # device_ids = [0, 1, 2, 3]  # List of GPU IDs that you want to use
+        # print("Let's use", torch.cuda.device_count(), "GPUs!")
+        # model = nn.DataParallel(model, device_ids = device_ids)
+        # X_test_num = X_test_num.float().to('cuda')
+        # X_test_cat = X_test_cat.to('cuda')
+        # model.to('cuda:0')
+    # else:
+        # model.to(device)
+        
+    model.to(device)
 
-    pre_encoder = Encoder_model(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR).to(device)
-    pre_decoder = Decoder_model(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR).to(device)
+    pre_encoder = Encoder_NFLOW_model_nextgen(d_numerical, categories, D_TOKEN).to(device)
+    pre_decoder = Decoder_NFLOW_model_nextgen(d_numerical, categories, D_TOKEN).to(device)
 
     pre_encoder.eval()
     pre_decoder.eval()
@@ -115,68 +122,60 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=10, verbose=True)
 
-    num_epochs = 4000
+    num_epochs = 100
     best_train_loss = float('inf')
 
     current_lr = optimizer.param_groups[0]['lr']
     patience = 0
 
-    beta = max_beta
+    beta = 0.5 # lets give equal weights to reconstruction and log prob
     start_time = time.time()
     for epoch in range(num_epochs):
         pbar = tqdm(train_loader, total=len(train_loader))
         pbar.set_description(f"Epoch {epoch+1}/{num_epochs}")
 
-        curr_loss_multi = 0.0
-        curr_loss_gauss = 0.0
-        curr_loss_kl = 0.0
+        curr_log_loss = 0.0
 
         curr_count = 0
 
-        for batch_num, batch_cat in pbar:
+        for batch_data in pbar:
             model.train()
             optimizer.zero_grad()
 
-            batch_num = batch_num.to(device)
-            batch_cat = batch_cat.to(device)
+            #batch_data = batch_data.numpy()
+            #print('batch_data shape = ', batch_data.shape)
+            #print('batch_data 0 = ', batch_data[0:2])
+            
+            batch_data = batch_data.to(device)
+            log_prob = model.log_prob(batch_data)
 
-            Recon_X_num, Recon_X_cat, mu_z, std_z = model(batch_num, batch_cat)
-        
-            loss_mse, loss_ce, loss_kld, train_acc = compute_loss(batch_num, batch_cat, Recon_X_num, Recon_X_cat, mu_z, std_z)
-
-            loss = loss_mse + loss_ce + beta * loss_kld
+            loss = -log_prob.mean()
             loss.backward()
             optimizer.step()
 
-            batch_length = batch_num.shape[0]
+            batch_length = batch_data.shape[0]
             curr_count += batch_length
-            curr_loss_multi += loss_ce.item() * batch_length
-            curr_loss_gauss += loss_mse.item() * batch_length
-            curr_loss_kl    += loss_kld.item() * batch_length
 
-        num_loss = curr_loss_gauss / curr_count
-        cat_loss = curr_loss_multi / curr_count
-        kl_loss = curr_loss_kl / curr_count
+            curr_log_loss += loss * batch_length
+
+        nflow_loss = curr_log_loss / curr_count
         
-
         '''
             Evaluation
         '''
         model.eval()
         with torch.no_grad():
-            Recon_X_num, Recon_X_cat, mu_z, std_z = model(X_test_num, X_test_cat)
+            test_log_prob = model.log_prob(test_ae)
 
-            val_mse_loss, val_ce_loss, val_kl_loss, val_acc = compute_loss(X_test_num, X_test_cat, Recon_X_num, Recon_X_cat, mu_z, std_z)
-            val_loss = val_mse_loss.item() * 0 + val_ce_loss.item()    
-
-            scheduler.step(val_loss)
+            test_loss = -test_log_prob.mean()
+            #scheduler.step(test_loss)
             new_lr = optimizer.param_groups[0]['lr']
 
             if new_lr != current_lr:
                 current_lr = new_lr
                 print(f"Learning rate updated: {current_lr}")
                 
-            train_loss = val_loss
+            train_loss = test_loss
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
                 patience = 0
@@ -189,25 +188,25 @@ def main(args):
 
 
         # print('epoch: {}, beta = {:.6f}, Train MSE: {:.6f}, Train CE:{:.6f}, Train KL:{:.6f}, Train ACC:{:6f}'.format(epoch, beta, num_loss, cat_loss, kl_loss, train_acc.item()))
-        print('epoch: {}, beta = {:.6f}, Train MSE: {:.6f}, Train CE:{:.6f}, Train KL:{:.6f}, Val MSE:{:.6f}, Val CE:{:.6f}, Train ACC:{:6f}, Val ACC:{:6f}'.format(epoch, beta, num_loss, cat_loss, kl_loss, val_mse_loss.item(), val_ce_loss.item(), train_acc.item(), val_acc.item() ))
+        print('epoch: {}, Train NFLOW log prob:{:.6f}, Current Test log prob:{:.6f}'.format(epoch,  nflow_loss, test_log_prob.mean()))
 
     end_time = time.time()
     print('Training time: {:.4f} mins'.format((end_time - start_time)/60))
     
     # Saving latent embeddings
     with torch.no_grad():
+        
         pre_encoder.load_weights(model)
-        pre_decoder.load_weights(model)
+        pre_decoder.load_weights(model, pre_trained_decoder_model)
 
         torch.save(pre_encoder.state_dict(), encoder_save_path)
         torch.save(pre_decoder.state_dict(), decoder_save_path)
 
-        X_train_num = X_train_num.to(device)
-        X_train_cat = X_train_cat.to(device)
+        train_ae = train_ae.to(device)
 
         print('Successfully load and save the model!')
 
-        train_z = pre_encoder(X_train_num, X_train_cat).detach().cpu().numpy()
+        train_z = pre_encoder(train_ae).detach().cpu().numpy()
 
         np.save(f'{ckpt_dir}/train_z.npy', train_z)
 

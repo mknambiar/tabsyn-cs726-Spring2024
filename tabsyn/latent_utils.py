@@ -5,9 +5,12 @@ import pandas as pd
 import torch
 from utils_train import preprocess
 from tabsyn.vae.model import Decoder_model 
+from tabsyn.nflow.model import Decoder_NFLOW_model_nextgen
 
 def get_input_train(args):
     dataname = args.dataname
+    latent = args.latent
+
 
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     dataset_dir = f'data/{dataname}'
@@ -15,25 +18,29 @@ def get_input_train(args):
     with open(f'{dataset_dir}/info.json', 'r') as f:
         info = json.load(f)
 
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/'
-    embedding_save_path = f'{curr_dir}/vae/ckpt/{dataname}/train_z.npy'
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/{latent}'
+    embedding_save_path = f'{curr_dir}/{latent}/ckpt/{dataname}/train_z.npy'
     train_z = torch.tensor(np.load(embedding_save_path)).float()
-
-    train_z = train_z[:, 1:, :]
-    B, num_tokens, token_dim = train_z.size()
-    in_dim = num_tokens * token_dim
     
-    train_z = train_z.view(B, in_dim)
+    print('embedding_save_path = ', embedding_save_path)
+    print('train_z shape = ', train_z.shape)
+    
+    if latent == "vae":
+        train_z = train_z[:, 1:, :]
+        B, num_tokens, token_dim = train_z.size()
+        in_dim = num_tokens * token_dim
+        train_z = train_z.view(B, in_dim)
 
     return train_z, curr_dir, dataset_dir, ckpt_dir, info
 
 
 def get_input_generate(args):
     dataname = args.dataname
+    latent = args.latent
 
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     dataset_dir = f'data/{dataname}'
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}'
+    #ckpt_dir = f'{curr_dir}/ckpt/{dataname}'
 
     with open(f'{dataset_dir}/info.json', 'r') as f:
         info = json.load(f)
@@ -41,24 +48,28 @@ def get_input_generate(args):
     task_type = info['task_type']
 
 
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}'
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/{latent}'
 
     _, _, categories, d_numerical, num_inverse, cat_inverse = preprocess(dataset_dir, task_type = task_type, inverse = True)
 
-    embedding_save_path = f'{curr_dir}/vae/ckpt/{dataname}/train_z.npy'
+    embedding_save_path = f'{curr_dir}/{latent}/ckpt/{dataname}/train_z.npy'
     train_z = torch.tensor(np.load(embedding_save_path)).float()
 
-    train_z = train_z[:, 1:, :]
+    if latent == "vae":
+        train_z = train_z[:, 1:, :]
 
-    B, num_tokens, token_dim = train_z.size()
-    in_dim = num_tokens * token_dim
-    
-    train_z = train_z.view(B, in_dim)
-    pre_decoder = Decoder_model(2, d_numerical, categories, 4, n_head = 1, factor = 32)
+        B, num_tokens, token_dim = train_z.size()
+        in_dim = num_tokens * token_dim
+        
+        train_z = train_z.view(B, in_dim)   
 
-    decoder_save_path = f'{curr_dir}/vae/ckpt/{dataname}/decoder.pt'
+        pre_decoder = Decoder_model(2, d_numerical, categories, 4, n_head = 1, factor = 32)
+    else:
+        token_dim = 4 #The original authors have it hardcoded. We follow suit!
+        pre_decoder = Decoder_NFLOW_model_nextgen(d_numerical, categories, token_dim)
+
+    decoder_save_path = f'{curr_dir}/{latent}/ckpt/{dataname}/decoder.pt'
     pre_decoder.load_state_dict(torch.load(decoder_save_path))
-
     info['pre_decoder'] = pre_decoder
     info['token_dim'] = token_dim
 
@@ -67,7 +78,7 @@ def get_input_generate(args):
 
  
 @torch.no_grad()
-def split_num_cat_target(syn_data, info, num_inverse, cat_inverse, device):
+def split_num_cat_target(syn_data, info, num_inverse, cat_inverse, device, latent):
     task_type = info['task_type']
 
     num_col_idx = info['num_col_idx']
@@ -86,9 +97,13 @@ def split_num_cat_target(syn_data, info, num_inverse, cat_inverse, device):
     pre_decoder = info['pre_decoder']
     token_dim = info['token_dim']
 
-    syn_data = syn_data.reshape(syn_data.shape[0], -1, token_dim)
+    #print('syn_data shape before reshape = ', syn_data.shape)
+    if latent == "vae":
+        syn_data = syn_data.reshape(syn_data.shape[0], -1, token_dim)
     
-    norm_input = pre_decoder(torch.tensor(syn_data))
+    #print('syn_data shape after reshape = ', syn_data.shape)
+    pre_decoder = pre_decoder.to(device)
+    norm_input = pre_decoder(torch.tensor(syn_data).to(device))
     x_hat_num, x_hat_cat = norm_input
 
     syn_cat = []

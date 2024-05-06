@@ -12,7 +12,7 @@ from tqdm import tqdm
 import json
 import time
 
-from tabsyn.vae.model import Model_VAE, Encoder_model, Decoder_model
+from tabsyn.nflow.model import AE
 from utils_train import preprocess, TabularDataset
 
 warnings.filterwarnings('ignore')
@@ -28,7 +28,7 @@ FACTOR = 32
 NUM_LAYERS = 2
 
 
-def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat, mu_z, logvar_z):
+def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat):
     ce_loss_fn = nn.CrossEntropyLoss()
     mse_loss = (X_num - Recon_X_num).pow(2).mean()
     ce_loss = 0
@@ -45,17 +45,14 @@ def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat, mu_z, logvar_z):
     ce_loss /= (idx + 1)
     acc /= total_num
     # loss = mse_loss + ce_loss
-
-    temp = 1 + logvar_z - mu_z.pow(2) - logvar_z.exp()
-
-    loss_kld = -0.5 * torch.mean(temp.mean(-1).mean())
-    return mse_loss, ce_loss, loss_kld, acc
+    
+    return mse_loss, ce_loss, acc
 
 
 def main(args):
     dataname = args.dataname
-    data_dir = f'data/{dataname}'
     latent = args.latent
+    data_dir = f'data/{dataname}'
 
     max_beta = args.max_beta
     min_beta = args.min_beta
@@ -70,13 +67,13 @@ def main(args):
         info = json.load(f)
 
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/' 
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}' 
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
 
-    model_save_path = f'{ckpt_dir}/model.pt'
-    encoder_save_path = f'{ckpt_dir}/encoder.pt'
-    decoder_save_path = f'{ckpt_dir}/decoder.pt'
+    model_save_path = f'{ckpt_dir}/ae_model.pt'
+    encoder_save_path = f'{ckpt_dir}/ae_encoder.pt'
+    decoder_save_path = f'{ckpt_dir}/ae_decoder.pt'
 
     X_num, X_cat, categories, d_numerical = preprocess(data_dir, task_type = info['task_type'])
 
@@ -103,25 +100,19 @@ def main(args):
         num_workers = 4,
     )
 
-    model = Model_VAE(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR, bias = True)
-    model = model.to(device)
-
-    pre_encoder = Encoder_model(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR).to(device)
-    pre_decoder = Decoder_model(NUM_LAYERS, d_numerical, categories, D_TOKEN, n_head = N_HEAD, factor = FACTOR).to(device)
-
-    pre_encoder.eval()
-    pre_decoder.eval()
+    model = AE(d_numerical, categories, D_TOKEN, bias = True)
+        
+    model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=10, verbose=True)
 
-    num_epochs = 4000
+    num_epochs = 1000
     best_train_loss = float('inf')
 
     current_lr = optimizer.param_groups[0]['lr']
     patience = 0
 
-    beta = max_beta
     start_time = time.time()
     for epoch in range(num_epochs):
         pbar = tqdm(train_loader, total=len(train_loader))
@@ -129,7 +120,6 @@ def main(args):
 
         curr_loss_multi = 0.0
         curr_loss_gauss = 0.0
-        curr_loss_kl = 0.0
 
         curr_count = 0
 
@@ -140,11 +130,12 @@ def main(args):
             batch_num = batch_num.to(device)
             batch_cat = batch_cat.to(device)
 
-            Recon_X_num, Recon_X_cat, mu_z, std_z = model(batch_num, batch_cat)
+            #print('batch_num shape = ', batch_num.shape, 'batch_cat shape = ', batch_cat.shape)
+            Recon_X_num, Recon_X_cat = model(batch_num, batch_cat)
         
-            loss_mse, loss_ce, loss_kld, train_acc = compute_loss(batch_num, batch_cat, Recon_X_num, Recon_X_cat, mu_z, std_z)
+            loss_mse, loss_ce, train_acc = compute_loss(batch_num, batch_cat, Recon_X_num, Recon_X_cat)
 
-            loss = loss_mse + loss_ce + beta * loss_kld
+            loss = loss_mse + loss_ce
             loss.backward()
             optimizer.step()
 
@@ -152,22 +143,19 @@ def main(args):
             curr_count += batch_length
             curr_loss_multi += loss_ce.item() * batch_length
             curr_loss_gauss += loss_mse.item() * batch_length
-            curr_loss_kl    += loss_kld.item() * batch_length
 
         num_loss = curr_loss_gauss / curr_count
         cat_loss = curr_loss_multi / curr_count
-        kl_loss = curr_loss_kl / curr_count
-        
 
         '''
             Evaluation
         '''
         model.eval()
         with torch.no_grad():
-            Recon_X_num, Recon_X_cat, mu_z, std_z = model(X_test_num, X_test_cat)
+            Recon_X_num, Recon_X_cat = model(X_test_num, X_test_cat)
 
-            val_mse_loss, val_ce_loss, val_kl_loss, val_acc = compute_loss(X_test_num, X_test_cat, Recon_X_num, Recon_X_cat, mu_z, std_z)
-            val_loss = val_mse_loss.item() * 0 + val_ce_loss.item()    
+            val_mse_loss, val_ce_loss, val_acc = compute_loss(X_test_num, X_test_cat, Recon_X_num, Recon_X_cat)
+            val_loss = val_mse_loss.item() * 0 + val_ce_loss.item()
 
             scheduler.step(val_loss)
             new_lr = optimizer.param_groups[0]['lr']
@@ -183,33 +171,35 @@ def main(args):
                 torch.save(model.state_dict(), model_save_path)
             else:
                 patience += 1
-                if patience == 10:
-                    if beta > min_beta:
-                        beta = beta * lambd
 
-
-        # print('epoch: {}, beta = {:.6f}, Train MSE: {:.6f}, Train CE:{:.6f}, Train KL:{:.6f}, Train ACC:{:6f}'.format(epoch, beta, num_loss, cat_loss, kl_loss, train_acc.item()))
-        print('epoch: {}, beta = {:.6f}, Train MSE: {:.6f}, Train CE:{:.6f}, Train KL:{:.6f}, Val MSE:{:.6f}, Val CE:{:.6f}, Train ACC:{:6f}, Val ACC:{:6f}'.format(epoch, beta, num_loss, cat_loss, kl_loss, val_mse_loss.item(), val_ce_loss.item(), train_acc.item(), val_acc.item() ))
+        print('epoch: {},  Train MSE: {:.6f}, Train CE:{:.6f}, Val MSE:{:.6f}, Val CE:{:.6f}, Train ACC:{:6f}, Val ACC:{:6f}'.format(epoch, num_loss, cat_loss, val_mse_loss.item(), val_ce_loss.item(), train_acc.item(), val_acc.item() ))
 
     end_time = time.time()
     print('Training time: {:.4f} mins'.format((end_time - start_time)/60))
     
     # Saving latent embeddings
     with torch.no_grad():
-        pre_encoder.load_weights(model)
-        pre_decoder.load_weights(model)
 
-        torch.save(pre_encoder.state_dict(), encoder_save_path)
-        torch.save(pre_decoder.state_dict(), decoder_save_path)
+        torch.save(model.Tokenizer.state_dict(), encoder_save_path)
+        torch.save(model.Reconstructor.state_dict(), decoder_save_path)
 
         X_train_num = X_train_num.to(device)
         X_train_cat = X_train_cat.to(device)
 
         print('Successfully load and save the model!')
 
-        train_z = pre_encoder(X_train_num, X_train_cat).detach().cpu().numpy()
+        train_ae = model.Tokenizer(X_train_num, X_train_cat).detach().cpu().numpy()
 
-        np.save(f'{ckpt_dir}/train_z.npy', train_z)
+        np.save(f'{ckpt_dir}/train_ae.npy', train_ae)
+        
+        X_test_num = X_test_num.to(device)
+        X_test_cat = X_test_cat.to(device)
+
+        print('Successfully load and save the model!')
+
+        test_ae = model.Tokenizer(X_test_num, X_test_cat).detach().cpu().numpy()
+
+        np.save(f'{ckpt_dir}/test_ae.npy', test_ae)
 
         print('Successfully save pretrained embeddings in disk!')
 
@@ -219,9 +209,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataname', type=str, default='adult', help='Name of dataset.')
     parser.add_argument('--gpu', type=int, default=0, help='GPU index.')
-    parser.add_argument('--max_beta', type=float, default=1e-2, help='Initial Beta.')
-    parser.add_argument('--min_beta', type=float, default=1e-5, help='Minimum Beta.')
-    parser.add_argument('--lambd', type=float, default=0.7, help='Decay of Beta.')
 
     args = parser.parse_args()
 

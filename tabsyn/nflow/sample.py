@@ -4,9 +4,9 @@ import argparse
 import warnings
 import time
 
-from tabsyn.model import MLPDiffusion, Model
 from tabsyn.latent_utils import get_input_generate, recover_data, split_num_cat_target
-from tabsyn.diffusion_utils import sample
+
+from nflows.distributions.normal import StandardNormal
 
 warnings.filterwarnings('ignore')
 
@@ -26,12 +26,6 @@ def main(args):
 
     mean = train_z.mean(0)
 
-    denoise_fn = MLPDiffusion(in_dim, 1024).to(device)
-    
-    model = Model(denoise_fn = denoise_fn, hid_dim = train_z.shape[1]).to(device)
-
-    model.load_state_dict(torch.load(f'{ckpt_path}/model.pt'))
-
     '''
         Generating samples    
     '''
@@ -39,9 +33,9 @@ def main(args):
 
     num_samples = train_z.shape[0]
     sample_dim = in_dim
-
-    x_next = sample(model.denoise_fn_D, num_samples, sample_dim, device = device)
-    x_next = x_next * 2 + mean.to(device)
+    dist = StandardNormal([sample_dim])
+    
+    x_next = dist.sample(num_samples)
 
     syn_data = x_next.float().cpu().numpy()
     syn_num, syn_cat, syn_target = split_num_cat_target(syn_data, info, num_inverse, cat_inverse, device, args.latent) 

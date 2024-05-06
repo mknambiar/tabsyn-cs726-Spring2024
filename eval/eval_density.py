@@ -8,12 +8,12 @@ import json
 from sdmetrics.reports.single_table import QualityReport, DiagnosticReport
 from sdmetrics.reports.single_table._properties import Coverage
 
-
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataname', type=str, default='adult')
 parser.add_argument('--model', type=str, default='tabsyn')
+parser.add_argument('--latent', type=str, default='vae')
 parser.add_argument('--path', type=str, default = None, help='The file path of the synthetic data')
 
 args = parser.parse_args()
@@ -64,9 +64,10 @@ if __name__ == '__main__':
 
     dataname = args.dataname
     model = args.model
+    latent = args.latent
 
     if not args.path:
-        syn_path = f'synthetic/{dataname}/{model}.csv'
+        syn_path = f'synthetic/{dataname}/{model}_{latent}.csv'
     else:
         syn_path = args.path
 
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     syn_data = pd.read_csv(syn_path)
     real_data = pd.read_csv(real_path)
 
-    save_dir = f'eval/density/{dataname}/{model}'
+    save_dir = f'eval/density/{dataname}/{model}_{latent}'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 

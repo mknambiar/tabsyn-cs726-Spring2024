@@ -16,6 +16,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataname', type=str, default='adult')
 parser.add_argument('--model', type=str, default='real')
+parser.add_argument('--latent', type=str, default='vae')
 parser.add_argument('--path', type=str, default = None, help='The file path of the synthetic data')
 
 args = parser.parse_args()
@@ -28,9 +29,10 @@ if __name__ == '__main__':
 
     dataname = args.dataname
     model = args.model
+    latent = args.latent
     
     if not args.path:
-        train_path = f'synthetic/{dataname}/{model}.csv'
+        train_path = f'synthetic/{dataname}/{model}_{latent}.csv'
     else:
         train_path = args.path
     test_path = f'synthetic/{dataname}/test.csv'
@@ -74,7 +76,7 @@ if __name__ == '__main__':
     if not os.path.exists(f'eval/mle/{dataname}'):
         os.makedirs(f'eval/mle/{dataname}')
     
-    save_path = f'eval/mle/{dataname}/{model}.json'
+    save_path = f'eval/mle/{dataname}/{model}_{latent}.json'
     print('Saving scores to ', save_path)
     with open(save_path, "w") as json_file:
         json.dump(overall_scores, json_file, indent=4, separators=(", ", ": "))
