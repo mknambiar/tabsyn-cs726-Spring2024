@@ -55,6 +55,7 @@ def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat, mu_z, logvar_z):
 def main(args):
     dataname = args.dataname
     data_dir = f'data/{dataname}'
+    latent = args.latent
 
     max_beta = args.max_beta
     min_beta = args.min_beta
@@ -69,7 +70,7 @@ def main(args):
         info = json.load(f)
 
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    ckpt_dir = f'{curr_dir}/ckpt/{dataname}' 
+    ckpt_dir = f'{curr_dir}/ckpt/{dataname}/' 
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
 

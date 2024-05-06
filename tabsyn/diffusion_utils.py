@@ -21,6 +21,7 @@ S_noise=1
 
 def sample(net, num_samples, dim, num_steps = 50, device = 'cuda:0'):
     latents = torch.randn([num_samples, dim], device=device)
+    print('latents device = ', latents.device)
 
     step_indices = torch.arange(num_steps, dtype=torch.float32, device=latents.device)
 
