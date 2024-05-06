@@ -14,13 +14,16 @@ from baselines.tabddpm.main_sample import main as sample_tabddpm
 from tabsyn.vae.main import main as train_vae
 from tabsyn.main import main as train_tabsyn
 from tabsyn.sample import main as sample_tabsyn
+#from tabsyn.nflow.main import main as train_nflow
+from tabsyn.nflow.sample import main as sample_nflow
+from tabsyn.vae.sample import main as sample_vae
+from tabsyn.nflow.aemain import main as train_ae
+from tabsyn.nflow.nfmain import main as train_nflow
 
 import argparse
 import importlib
 
 def execute_function(method, mode):
-    if method == 'vae':
-        mode = 'train'
 
     main_fn = eval(f'{mode}_{method}')
 
