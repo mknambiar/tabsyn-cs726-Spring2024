@@ -135,12 +135,15 @@ def get_args():
     # configs for SMOTE
     parser.add_argument('--cat_encoding', type=str, default='one-hot', help='Encoding method for categorical features')
 
+    # config for tabsyn 
+    parser.add_argument('--latent', type=str, default='vae', help='vae or nflow')    
 
     # configs for traing TabSyn's VAE
     parser.add_argument('--max_beta', type=float, default=1e-2, help='Maximum beta')
     parser.add_argument('--min_beta', type=float, default=1e-5, help='Minimum beta.')
     parser.add_argument('--lambd', type=float, default=0.7, help='Batch size.')
 
+    #no configs for Tabsyn's NFLOW for now
 
     # configs for sampling
     parser.add_argument('--save_path', type=str, default=None, help='Path to save synthetic data.')
