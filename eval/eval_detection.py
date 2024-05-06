@@ -20,6 +20,7 @@ warnings.filterwarnings("ignore")
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataname', type=str, default='adult')
 parser.add_argument('--model', type=str, default='real')
+parser.add_argument('--latent', type=str, default='vae')
 
 args = parser.parse_args()
 
@@ -68,8 +69,9 @@ if __name__ == '__main__':
 
     dataname = args.dataname
     model = args.model
+    latent = args.latent
 
-    syn_path = f'synthetic/{dataname}/{model}.csv'
+    syn_path = f'synthetic/{dataname}/{model}_{latent}.csv'
     real_path = f'synthetic/{dataname}/real.csv'
 
     data_dir = f'data/{dataname}' 
@@ -81,7 +83,7 @@ if __name__ == '__main__':
     syn_data = pd.read_csv(syn_path)
     real_data = pd.read_csv(real_path)
 
-    save_dir = f'eval/density/{dataname}/{model}'
+    save_dir = f'eval/density/{dataname}/{model}_{latent}'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
@@ -101,4 +103,4 @@ if __name__ == '__main__':
         metadata=metadata
     )
 
-    print(f'{dataname}, {model}: {score}')
+    print(f'{dataname}, {model}_{latent}: {score}')

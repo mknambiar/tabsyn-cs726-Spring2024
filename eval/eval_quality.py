@@ -17,6 +17,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataname', type=str, default='adult')
 parser.add_argument('--model', type=str, default='model')
+parser.add_argument('--latent', type=str, default='vae')
 parser.add_argument('--path', type=str, default = None, help='The file path of the synthetic data')
 
 
@@ -27,9 +28,10 @@ if __name__ == '__main__':
 
     dataname = args.dataname
     model = args.model
+    latent = args.latent
 
     if not args.path:
-        syn_path = f'synthetic/{dataname}/{model}.csv'
+        syn_path = f'synthetic/{dataname}/{model}_{latent}.csv'
     else:
         syn_path = args.path
     real_path = f'synthetic/{dataname}/real.csv'
@@ -152,6 +154,6 @@ if __name__ == '__main__':
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    with open(f'{save_dir}/{model}.txt', 'w') as f:
+    with open(f'{save_dir}/{model}_{latent}.txt', 'w') as f:
         f.write(f'{Alpha_Precision_all}\n')
         f.write(f'{Beta_Recall_all}\n')
